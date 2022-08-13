@@ -13,6 +13,7 @@ import logging
 from logging import Formatter, FileHandler
 from flask_migrate import Migrate
 from forms import *
+from models import *
 # from models import db, Artist, Venue, Shows
 
 
@@ -30,71 +31,6 @@ migrate = Migrate(app, db)
 
 SQLALCHEMY_DATABASE_URI = 'postgres://mitch:mufasa2019@localhost:5432/fyyur'
 
-#----------------------------------------------------------------------------#
-# Models.
-#----------------------------------------------------------------------------#
-class Venue(db.Model):
-    __tablename__ = 'venues'
-
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String)
-    city = db.Column(db.String(120))
-    state = db.Column(db.String(120))
-    address = db.Column(db.String(120))
-    phone = db.Column(db.String(120))
-    image_link = db.Column(db.String(500))
-    facebook_link = db.Column(db.String(120))
-    website = db.Column(db.String(120))
-    seeking_talent = db.Column(db.Boolean, nullable=False, default=False)
-    seeking_description = db.Column(db.String())
-    genres = db.Column("genres", db.ARRAY(db.String), nullable=False)
-
-    shows = db.relationship('Show', backref='venue', lazy='True')
-
-    def __repr__(self):
-        return f'<Venue ID: {self.id}, name: {self.name}>'
-
-
-
-
-    # TODO: implement any missing fields, as a database migration using Flask-Migrate
-
-class Artist(db.Model):
-    __tablename__ = 'artists'
-
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String)
-    city = db.Column(db.String(120))
-    state = db.Column(db.String(120))
-    phone = db.Column(db.String(120))
-    genres = db.Column(db.String(120))
-    image_link = db.Column(db.String(500))
-    facebook_link = db.Column(db.String(120))
-    website = db.Column(db.String(120))
-    seeking_talent = db.Column(db.Boolean, nullable=False, default=False)
-    seeking_description = db.Column(db.String())
-    genres = db.Column("genres", db.ARRAY(db.String), nullable=False)
-
-    shows = db.relationship('Show', backref='artist', lazy='True')
-
-    def __repr__(self):
-        return f'<Artist ID: {self.id}, name: {self.name}>'
-
-
-
-
-    # TODO: implement any missing fields, as a database migration using Flask-Migrate
-
-class Shows(db.Model):
-    _tablename__ = 'shows'
-
-    id = db.Column(db.Integer, primary_key=True)
-    venue_id = db.Column(db.Integer, db.ForeignKey('venues.id'), nullable=False)
-    artist_id = db.Column(db.Integer, db.ForeignKey('artists.id'), nullable=False)
-    start_time = db.Column(db.DateTime, nullable=False)
-
-
-# TODO Implement Show and Artist models, and complete all model relationships and properties, as a database migration.
 
 
 #----------------------------------------------------------------------------#
@@ -141,6 +77,9 @@ def venues():
   
   return render_template('pages/venues.html', areas=data)
 
+# Search venues
+# ..................................
+
 @app.route('/venues/search', methods=['POST'])
 def search_venues():
   
@@ -163,6 +102,9 @@ def search_venues():
   }
   return render_template('pages/search_venues.html', results=response, search_term=request.form.get('search_term', ''))
 
+# Get venue by id
+# ..................................
+
 @app.route('/venues/<int:venue_id>')
 def show_venue(venue_id):
  
@@ -170,18 +112,21 @@ def show_venue(venue_id):
   if venue is None:
       abort(404)
 
-  upcoming_shows = []
-  past_shows = []
-  for show in venue.shows :
-    if show.date > datetime.now():
-      upcoming_shows.append(show)
-    else:
-      past_shows.append(show)
-  venue.upcoming_shows = upcoming_shows
-  venue.past_shows = past_shows    
+  past_shows = Shows.query.filter(
+      Shows.venue_id == venue.id, Shows.start_time < datetime.now())
+  upcoming_shows = Shows.query.filter(
+      Shows.venue_id == venue.id, Shows.start_time >= datetime.now())
 
+  data = []
+  shows_data = {
+        "upcoming_shows": upcoming_shows.all(),
+        "past_shows": past_shows.all(),
+        "past_shows_count": len(past_shows),
+        "upcoming_shows_count": len(upcoming_shows.count())
+    }
+  data.append(shows_data)
   # data = list(filter(lambda d: d['id'] == venue_id, [data1, data2, data3]))[0]
-  return render_template('pages/show_venue.html', venue=venue)
+  return render_template('pages/show_venue.html', venue=data)
 
 #  Create Venue
 #  ----------------------------------------------------------------
@@ -191,6 +136,8 @@ def create_venue_form():
   form = VenueForm()
   return render_template('forms/new_venue.html', form=form)
 
+#  Create venue submission
+# ....................................................
 @app.route('/venues/create', methods=['POST'])
 def create_venue_submission():
   
@@ -222,6 +169,9 @@ def create_venue_submission():
 
     return render_template('pages/home.html')
 
+# delete venue
+# ........................................................
+
 @app.route('/venues/<venue_id>', methods=['DELETE'])
 def delete_venue(venue_id):
   
@@ -250,6 +200,8 @@ def artists():
   
   return render_template('pages/artists.html', artists=artists)
 
+# Search artists
+# ................................
 @app.route('/artists/search', methods=['POST'])
 def search_artists():
  
@@ -272,6 +224,8 @@ def search_artists():
   }
   return render_template('pages/search_artists.html', results=response, search_term=request.form.get('search_term', ''))
 
+# Show Artist by id
+# ......................................................
 @app.route('/artists/<int:artist_id>')
 def show_artist(artist_id):
   # shows the artist page with the given artist_id
@@ -300,6 +254,8 @@ def edit_artist(artist_id):
   
   return render_template('forms/edit_artist.html', form=form, artist=artist)
 
+# Edit artist submission
+# .............................................................
 @app.route('/artists/<int:artist_id>/edit', methods=['POST'])
 def edit_artist_submission(artist_id):
  
@@ -333,6 +289,8 @@ def edit_artist_submission(artist_id):
 
   return redirect(url_for('show_artist', artist_id=artist_id))
 
+# Edit Venue
+# ...........................................
 @app.route('/venues/<int:venue_id>/edit', methods=['GET'])
 def edit_venue(venue_id):
   form = ArtistForm()
@@ -340,6 +298,8 @@ def edit_venue(venue_id):
   
   return render_template('forms/edit_venue.html', form=form, venue=venue)
 
+# Edit venue submission
+# ..............................................
 @app.route('/venues/<int:venue_id>/edit', methods=['POST'])
 def edit_venue_submission(venue_id):
   
@@ -380,6 +340,8 @@ def create_artist_form():
   form = ArtistForm()
   return render_template('forms/new_artist.html', form=form)
 
+# new artist listing
+# ........................................
 @app.route('/artists/create', methods=['POST'])
 def create_artist_submission():
   # called upon submitting the new artist listing form
@@ -440,6 +402,8 @@ def create_shows():
   form = ShowForm()
   return render_template('forms/new_show.html', form=form)
 
+# new show for listing
+# .................................
 @app.route('/shows/create', methods=['POST'])
 def create_show_submission():
   # called to create new shows in the db, upon submitting new show listing form
